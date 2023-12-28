@@ -6,7 +6,6 @@ import { CreateNewFileForm } from "./create_new_file";
 
 export function ConfigureForm() {
   const [defaultDoc, setDefaultDoc] = useCachedState<GoogleDoc>("default-doc");
-  const [, setCurrentDoc] = useCachedState<GoogleDoc | undefined>("current-doc");
   const [raycastFiles] = useCachedState<Array<GoogleDoc>>("raycast-notes-files", []);
 
   function CreateNewFileAction() {
@@ -26,7 +25,7 @@ export function ConfigureForm() {
                 key={file.id}
                 onAction={() => {
                   setDefaultDoc(file);
-                  setCurrentDoc(file);
+                  // setCurrentDoc(file);
                 }}
               />
             );
@@ -52,7 +51,7 @@ export function ConfigureForm() {
         onChange={(newValue: string) => {
           const doc = raycastFiles?.find((file) => file.id === newValue);
           setDefaultDoc(doc);
-          setCurrentDoc(doc);
+          // setCurrentDoc(doc);
         }}
       >
         {raycastFiles &&
