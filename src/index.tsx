@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileSearchOperator, GoogleDoc, addNotesToFile, searchForFileByTitle } from "./google_fns";
 import { RAYCAST_SUFFIX, getOriginalNoteName } from "./util";
 import { createDocumentWithName } from "./screens/create_new_file";
-import { ListNotes } from "./screens/list_notes";
-import { ConfigureForm } from "./screens/configure_form";
+import { ListDocs } from "./screens/list_notes";
 import { authorize } from "./auth";
 
 interface Values {
@@ -19,20 +18,14 @@ const DEFAULT_NOTE_TITLE = "My Raycast Notes";
 const CONTENT_ERROR_STRING = "Note can not be empty!";
 
 export default function Command() {
-  const [currentDoc, setCurrentDoc] = useCachedState<GoogleDoc>("current-doc");
   const [defaultDoc, setDefaultDoc] = useCachedState<GoogleDoc>("default-doc");
+  const [currentDoc, setCurrentDoc] = useState<GoogleDoc | undefined>(defaultDoc);
   const [raycastFiles, setRaycastFiles] = useCachedState<Array<GoogleDoc>>("raycast-notes-files", []);
   const [, setIsAuthorized] = useState<boolean>(false);
   const [contentError, setContentError] = useState<string | undefined>();
   const noteContentRef = useRef<Form.TextArea>(null);
 
-  function handleCurrentDocChange(doc: GoogleDoc) {
-    console.log("setting current doc");
-    setCurrentDoc(doc);
-  }
-
   function handleDefaultDocChange(doc: GoogleDoc) {
-    console.log("setting default doc");
     setDefaultDoc(doc);
   }
 
@@ -44,14 +37,17 @@ export default function Command() {
 
   function CurrentNoteSelectionAction() {
     return (
-      <ActionPanel.Section title="Current File">
+      <ActionPanel.Section title="Change location for this note:">
         {raycastFiles?.map(
           (file) =>
             file && (
               <Action
+                icon={file.name === currentDoc?.name ? Icon.CheckCircle : Icon.Circle}
                 title={`${getOriginalNoteName(file.name)}${file.name === currentDoc?.name ? " (Current)" : ""}`}
                 key={file.id}
-                onAction={() => setCurrentDoc(file)}
+                onAction={() => {
+                  setCurrentDoc(file);
+                }}
               />
             ),
         )}
@@ -63,28 +59,19 @@ export default function Command() {
     return (
       <Action.Push
         icon={Icon.List}
-        title="My Docs"
+        title="All Docs"
         shortcut={{ modifiers: ["cmd"], key: "l" }}
         target={
-          <ListNotes
-            notes={raycastFiles}
-            onCurrentDocChange={handleCurrentDocChange}
+          <ListDocs
+            key={raycastFiles.length}
+            docs={raycastFiles}
             onDefaultDocChange={handleDefaultDocChange}
-            currentDoc={currentDoc!}
             defaultDoc={defaultDoc!}
+            onNewFileCreation={(file) => {
+              setRaycastFiles([file, ...raycastFiles]);
+            }}
           />
         }
-      />
-    );
-  }
-
-  function ConfigurationAction() {
-    return (
-      <Action.Push
-        icon={Icon.Bookmark}
-        title="Change Default Doc"
-        shortcut={{ modifiers: ["cmd"], key: "d" }}
-        target={<ConfigureForm />}
       />
     );
   }
@@ -116,13 +103,6 @@ export default function Command() {
   }
 
   useEffect(() => {
-    console.log("currentDoc changed");
-    if (currentDoc) {
-      setCurrentDoc(currentDoc);
-    }
-  }, [currentDoc]);
-
-  useEffect(() => {
     (async () => {
       try {
         await authorize();
@@ -141,18 +121,8 @@ export default function Command() {
                 setCurrentDoc(files[defaultDocIndex]);
               }
             } else {
-              console.log("Setting default doc");
               setDefaultDoc(files[0]);
               setCurrentDoc(files[0]);
-            }
-            if (currentDoc) {
-              const currentDocIndex = files.findIndex((file) => file.id === currentDoc.id);
-              if (currentDocIndex > -1) {
-                setCurrentDoc(files[currentDocIndex]);
-              }
-            } else {
-              console.log("Setting Current doc");
-              setCurrentDoc(defaultDoc);
             }
             setRaycastFiles(files);
           } else {
@@ -173,51 +143,12 @@ export default function Command() {
     })();
   }, []);
 
-  // const { isLoading } = usePromise(
-  //   async () => {
-  //     try {
-  //       // get all files
-  //       const files = await searchForFileByTitle(RAYCAST_SUFFIX, FileSearchOperator.contains);
-  //       if (files.length > 0) {
-  //         // search for default doc, if present, make it current doc
-  //         // if not, make first doc as default and current doc
-  //         if (defaultDoc) {
-  //           const defaultDocIndex = files.findIndex((file) => file.id === defaultDoc.id);
-  //           if (defaultDocIndex > -1) {
-  //             setDefaultDoc(files[defaultDocIndex]);
-  //             setCurrentDoc(files[defaultDocIndex]);
-  //           }
-  //         } else {
-  //           console.log("Setting default doc")
-  //           setDefaultDoc(files[0]);
-  //           setCurrentDoc(files[0]);
-  //         }
-  //         setRaycastFiles(files);
-  //       } else {
-  //         const newDoc = await createDocumentWithName(DEFAULT_NOTE_TITLE);
-  //         if (newDoc) {
-  //           setCurrentDoc(newDoc);
-  //           setDefaultDoc(newDoc);
-  //           setRaycastFiles([newDoc]);
-  //         }
-  //       }
-  //     } catch (error) {
-  //       showToast({ style: Toast.Style.Failure, title: String(error) });
-  //     }
-  //   },
-  //   [],
-  //   {
-  //     execute: isAuthorized,
-  //   },
-  // );
-
   return (
     <>
       <Form
         actions={
           <ActionPanel>
             <Action.SubmitForm icon={Icon.ArrowRightCircle} title="Send" onSubmit={handleSubmit} />
-            <ConfigurationAction></ConfigurationAction>
             <ShowMyNotesAction></ShowMyNotesAction>
             <CurrentNoteSelectionAction></CurrentNoteSelectionAction>
           </ActionPanel>
@@ -239,18 +170,16 @@ export default function Command() {
           title="Note"
           placeholder="Your Text"
         />
-        {defaultDoc && (
-          <Form.Description
-            text={`Your notes will be sent to default: ${
-              defaultDoc ? getOriginalNoteName(defaultDoc?.name) : "UNKNOWN"
-            }`}
-          />
-        )}
         {currentDoc && (
           <Form.Description
-            text={`Your notes will be sent to current: ${
-              currentDoc ? getOriginalNoteName(currentDoc?.name) : "UNKNOWN"
-            }`}
+            key={`current: ${currentDoc.id}`}
+            text={`Current note location: ${currentDoc ? getOriginalNoteName(currentDoc?.name) : "UNKNOWN"}`}
+          />
+        )}
+        {defaultDoc && (
+          <Form.Description
+            key={`default: ${defaultDoc.id}`}
+            text={`Default notes location: ${defaultDoc ? getOriginalNoteName(defaultDoc?.name) : "UNKNOWN"}`}
           />
         )}
       </Form>

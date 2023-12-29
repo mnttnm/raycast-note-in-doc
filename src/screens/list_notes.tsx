@@ -1,59 +1,62 @@
-import { ActionPanel, Action, List } from "@raycast/api";
-// import { useCachedState } from "@raycast/utils";
+import { ActionPanel, Action, List, Icon } from "@raycast/api";
 import { GoogleDoc } from "../google_fns";
 import { getOriginalNoteName } from "../util";
 import { useState } from "react";
+import { CreateNewFileForm } from "./create_new_file";
 
-export function ListNotes(props: {currentDoc: GoogleDoc, defaultDoc: GoogleDoc, notes: Array<GoogleDoc>, onDefaultDocChange: (doc: GoogleDoc) => void, onCurrentDocChange: (doc: GoogleDoc) => void }) {
-  const [myNotes] = useState<Array<GoogleDoc>>(props.notes);
+export function ListDocs(props: {
+  defaultDoc: GoogleDoc;
+  onDefaultDocChange: (doc: GoogleDoc) => void;
+  docs: Array<GoogleDoc>;
+  onNewFileCreation: (file: GoogleDoc) => void;
+}) {
   const [defaultDoc, setDefaultDoc] = useState<GoogleDoc>(props.defaultDoc);
-  const [currentDoc, setCurrentDoc] = useState<GoogleDoc>(props.currentDoc);
+  const [componentDocs, setComponentDocs] = useState<Array<GoogleDoc>>(props.docs);
+  const { onDefaultDocChange } = props;
 
-  const { onDefaultDocChange, onCurrentDocChange } = props;
-  
+  function handleNewFileCreation(file: GoogleDoc) {
+    setComponentDocs([file, ...componentDocs]);
+    props.onNewFileCreation(file);
+  }
+
+  function CreateNewFileAction() {
+    return (
+      <Action.Push
+        icon={Icon.NewDocument}
+        title="Create New Doc"
+        target={<CreateNewFileForm onNewFileCreation={handleNewFileCreation} />}
+        shortcut={{ modifiers: ["cmd"], key: "n" }}
+      />
+    );
+  }
+
   function NoteListItemActions(props: { file: GoogleDoc }) {
     return (
       <ActionPanel>
-        <ActionPanel.Section title="Set as">
-          <Action
-            title="Set as Current"
-            onAction={() => {
-              onCurrentDocChange(props.file);
-              setCurrentDoc(props.file);
-            }}
-          />
+        <ActionPanel.Section>
           <Action
             title="Set as Default"
+            icon={{ source: Icon.StarCircle }}
             onAction={() => {
               onDefaultDocChange(props.file);
               setDefaultDoc(props.file);
             }}
+            shortcut={{ modifiers: ["cmd"], key: "d" }}
           />
+          <Action.OpenInBrowser url={"https://docs.google.com/document/d/" + props.file.id} />
         </ActionPanel.Section>
-        <Action.OpenInBrowser
-          url={"https://docs.google.com/document/d/" + props.file.id}
-          shortcut={{ modifiers: ["cmd"], key: "o" }}
-        />
-        <Action.CopyToClipboard
-          title="Copy URL"
-          content={props.file.name}
-          shortcut={{ modifiers: ["cmd"], key: "c" }}
-        />
+        <CreateNewFileAction />
       </ActionPanel>
     );
   }
 
   function getListItemTitle(file: GoogleDoc) {
-    return (
-      getOriginalNoteName(file.name) +
-      (file.name === currentDoc?.name ? " (Current)" : "") +
-      (file.name === defaultDoc?.name ? " (Default)" : "")
-    );
+    return getOriginalNoteName(file.name) + (file.name === defaultDoc?.name ? " (Default)" : "");
   }
 
   return (
     <List>
-      {myNotes?.map((file) => (
+      {componentDocs?.map((file) => (
         <List.Item
           key={file.id}
           title={getListItemTitle(file)}
