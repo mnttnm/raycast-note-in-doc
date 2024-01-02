@@ -173,7 +173,7 @@ export default function Command() {
         {currentDoc && (
           <Form.Description
             key={`current: ${currentDoc.id}`}
-            text={`Current note location: ${currentDoc ? getOriginalNoteName(currentDoc?.name) : "UNKNOWN"}`}
+            text={`Send this note to: ${currentDoc ? getOriginalNoteName(currentDoc?.name) : "UNKNOWN"}`}
           />
         )}
         {defaultDoc && (
