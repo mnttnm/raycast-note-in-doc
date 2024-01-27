@@ -52,23 +52,48 @@ export async function searchForFileByTitle(
   }));
 }
 
-function formatTextToUpdate(originalText: string) {
-  const currentDateTime = getDateInLocaleFormat();
-  return `\n ${currentDateTime}\n ${originalText}\n`;
-}
-
 export async function addNotesToFile(noteContent: string, fileId: string) {
-  const response = await fetch("https://docs.googleapis.com/v1/documents/" + fileId + ":batchUpdate", {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${(await client.getTokens())?.accessToken}`,
+  const insertionIndex = 1;
+  const currentDateTime = getDateInLocaleFormat();
+  const timeStampEndIndex = currentDateTime.length + 1;
+
+  const accessToken = (await client.getTokens())?.accessToken;
+  const url = `https://docs.googleapis.com/v1/documents/${fileId}:batchUpdate`;
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
+  const timeStampRequest = {
+    location: { index: insertionIndex },
+    text: `${currentDateTime}\n`,
+  };
+  const updateTimestampStyleRequest = {
+    range: { startIndex: insertionIndex, endIndex: timeStampEndIndex },
+    textStyle: { bold: true },
+    fields: "bold",
+  };
+  const noteContentRequest = {
+    location: { index: timeStampEndIndex },
+    text: `\n${noteContent}\n`,
+  };
+  const noteContentRequestTextStyleRequest = {
+    range: {
+      startIndex: timeStampEndIndex,
+      endIndex: timeStampEndIndex + noteContent.length + 1,
     },
+    textStyle: { bold: false },
+    fields: "bold",
+  };
+
+  const response = await fetch(url, {
+    headers,
     method: "post",
     body: JSON.stringify({
       requests: [
-        {
-          insertText: { endOfSegmentLocation: { segmentId: "" }, text: formatTextToUpdate(noteContent) },
-        },
+        { insertText: timeStampRequest },
+        { updateTextStyle: updateTimestampStyleRequest },
+        { insertText: noteContentRequest },
+        { updateTextStyle: noteContentRequestTextStyleRequest },
       ],
     }),
   });

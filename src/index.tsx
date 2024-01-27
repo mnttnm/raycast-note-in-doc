@@ -91,7 +91,7 @@ export default function Command() {
             if (documentId) {
               await showToast({ style: Toast.Style.Success, title: "Posted!" });
               noteContentRef.current?.reset();
-              setTimeout(() => popToRoot(), 500);
+              popToRoot();
             } else {
               showToast({ style: Toast.Style.Failure, title: String("Failed!") });
             }
