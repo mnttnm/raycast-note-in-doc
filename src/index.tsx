@@ -149,7 +149,7 @@ export default function Command() {
           icon={Icon.AppWindowGrid3x3}
           title="Manage Templates"
           shortcut={{ modifiers: ["cmd"], key: "t" }}
-          target={<ManageTemplates onTemplateSelect={handleTemplateSelect} />}
+          target={<ManageTemplates onTemplateSelect={handleTemplateSelect} onTemplatesChanged={loadTemplates} />}
         />
       </ActionPanel.Section>
     );

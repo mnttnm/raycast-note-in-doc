@@ -8,7 +8,10 @@ import {
   updateTemplate,
 } from "../template-service";
 
-export function ManageTemplates(props: { onTemplateSelect?: (template: NoteTemplate) => void }) {
+export function ManageTemplates(props: {
+  onTemplateSelect?: (template: NoteTemplate) => void;
+  onTemplatesChanged?: () => void | Promise<void>;
+}) {
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -17,6 +20,12 @@ export function ManageTemplates(props: { onTemplateSelect?: (template: NoteTempl
     const allTemplates = await getTemplates();
     setTemplates(allTemplates);
     setIsLoading(false);
+  }
+
+  async function notifyParentOfChange() {
+    if (props.onTemplatesChanged) {
+      await props.onTemplatesChanged();
+    }
   }
 
   useEffect(() => {
@@ -46,18 +55,23 @@ export function ManageTemplates(props: { onTemplateSelect?: (template: NoteTempl
         await deleteTemplate(template.id);
         await showToast({ style: Toast.Style.Success, title: "Template deleted" });
         await loadTemplates();
+        await notifyParentOfChange();
       } catch (error) {
         await showToast({ style: Toast.Style.Failure, title: String(error) });
+        // Still notify parent after error settles so UI can refresh
+        await notifyParentOfChange();
       }
     }
   }
 
   async function handleNewTemplate(template: NoteTemplate) {
     setTemplates([template, ...templates]);
+    await notifyParentOfChange();
   }
 
   async function handleTemplateUpdate() {
     await loadTemplates();
+    await notifyParentOfChange();
   }
 
   function TemplateListItemActions(props: {

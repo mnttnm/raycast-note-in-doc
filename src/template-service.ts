@@ -131,23 +131,52 @@ export function substituteTemplateVariables(
     result = result.replace(/\{\{meeting_start\}\}/g, meetingContext.startTime);
     result = result.replace(/\{\{meeting_end\}\}/g, meetingContext.endTime);
   } else {
-    // Clear meeting variables if no context
-    result = result.replace(/\{\{meeting_title\}\}/g, "");
-    result = result.replace(/\{\{meeting_attendees\}\}/g, "");
-    result = result.replace(/\{\{meeting_start\}\}/g, "");
-    result = result.replace(/\{\{meeting_end\}\}/g, "");
+    // Remove entire lines containing meeting variables if no context
+    // This prevents awkward blank labels like "**Attendees:**" with no value
+    result = result.replace(/^.*\{\{meeting_title\}\}.*$/gm, "");
+    result = result.replace(/^.*\{\{meeting_attendees\}\}.*$/gm, "");
+    result = result.replace(/^.*\{\{meeting_start\}\}.*$/gm, "");
+    result = result.replace(/^.*\{\{meeting_end\}\}.*$/gm, "");
+
+    // Collapse consecutive blank lines (replace 3+ newlines with 2)
+    result = result.replace(/\n{3,}/g, "\n\n");
   }
 
-  return result;
+  // Trim final result to remove leading/trailing whitespace
+  return result.trim();
 }
 
 /**
  * Initialize default templates on first launch
  */
 export async function initializeTemplates(): Promise<void> {
-  const existing = await getTemplates();
-  if (existing.length === 0) {
-    await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+  try {
+    const existing = await getTemplates();
+    if (existing.length === 0) {
+      try {
+        await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("Failed to initialize default templates:", message);
+        throw new Error(`Failed to initialize default templates: ${message}`);
+      }
+    }
+  } catch (error) {
+    // If getTemplates fails, it's already handling errors internally
+    // But we should still log and potentially rethrow if it's not a parsing error
+    if (error instanceof Error && !error.message.includes("Failed to parse templates")) {
+      console.error("Error during template initialization:", error.message);
+      throw error;
+    }
+    // If it's a parsing error, getTemplates has already handled it by returning []
+    // So we can try to initialize defaults
+    try {
+      await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+    } catch (storageError) {
+      const message = storageError instanceof Error ? storageError.message : String(storageError);
+      console.error("Failed to initialize default templates after parsing error:", message);
+      throw new Error(`Failed to initialize default templates: ${message}`);
+    }
   }
 }
 
@@ -155,11 +184,35 @@ export async function initializeTemplates(): Promise<void> {
  * Get all templates
  */
 export async function getTemplates(): Promise<NoteTemplate[]> {
-  const templatesJson = await LocalStorage.getItem<string>(TEMPLATES_STORAGE_KEY);
-  if (!templatesJson) {
+  try {
+    const templatesJson = await LocalStorage.getItem<string>(TEMPLATES_STORAGE_KEY);
+    if (!templatesJson) {
+      return [];
+    }
+
+    try {
+      return JSON.parse(templatesJson) as NoteTemplate[];
+    } catch (parseError) {
+      // Handle corrupted JSON data
+      const message = parseError instanceof Error ? parseError.message : String(parseError);
+      console.error("Failed to parse templates from storage, clearing corrupted data:", message);
+
+      // Clear corrupted storage to prevent repeated failures
+      try {
+        await LocalStorage.removeItem(TEMPLATES_STORAGE_KEY);
+      } catch (removeError) {
+        console.error("Failed to clear corrupted templates:", removeError);
+      }
+
+      // Return empty array as safe fallback
+      return [];
+    }
+  } catch (error) {
+    // Handle LocalStorage errors
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to retrieve templates from storage:", message);
     return [];
   }
-  return JSON.parse(templatesJson) as NoteTemplate[];
 }
 
 /**
@@ -184,7 +237,15 @@ export async function createTemplate(
     createdAt: new Date().toISOString(),
   };
   templates.push(newTemplate);
-  await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+
+  try {
+    await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to persist new template:", message);
+    throw new Error(`Failed to create template: ${message}`);
+  }
+
   return newTemplate;
 }
 
@@ -198,13 +259,23 @@ export async function updateTemplate(id: string, updates: Partial<NoteTemplate>)
     throw new Error("Template not found");
   }
 
-  // Don't allow modifying built-in status
-  delete updates.isBuiltIn;
-  delete updates.id;
-  delete updates.createdAt;
+  // Create a shallow copy to avoid mutating the input object
+  const safeUpdates = { ...updates };
 
-  templates[index] = { ...templates[index], ...updates };
-  await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  // Don't allow modifying built-in status or metadata
+  delete safeUpdates.isBuiltIn;
+  delete safeUpdates.id;
+  delete safeUpdates.createdAt;
+
+  templates[index] = { ...templates[index], ...safeUpdates };
+
+  try {
+    await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to persist template update:", message);
+    throw new Error(`Failed to update template: ${message}`);
+  }
 }
 
 /**
@@ -223,12 +294,25 @@ export async function deleteTemplate(id: string): Promise<void> {
   }
 
   const filtered = templates.filter((t) => t.id !== id);
-  await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(filtered));
+
+  try {
+    await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to persist templates after delete:", message);
+    throw new Error(`Failed to delete template: ${message}`);
+  }
 }
 
 /**
  * Reset templates to defaults (for troubleshooting)
  */
 export async function resetToDefaults(): Promise<void> {
-  await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+  try {
+    await LocalStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to reset templates to defaults:", message);
+    throw new Error(`Failed to reset templates: ${message}`);
+  }
 }
