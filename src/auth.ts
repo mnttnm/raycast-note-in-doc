@@ -2,7 +2,7 @@ import { OAuth } from "@raycast/api";
 import fetch from "node-fetch";
 
 const clientId = "277994667370-o9tch6gd0i81jkqafo3qn4cb3drrccs5.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/drive.file";
+const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events.readonly";
 
 export const client = new OAuth.PKCEClient({
   redirectMethod: OAuth.RedirectMethod.AppURI,
